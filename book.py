@@ -4,6 +4,23 @@ import time
 import datetime
 import requests
 import json
+from pathlib import Path
+
+
+def load_env_file():
+    env_path = Path(__file__).parent / ".env"
+    if env_path.exists():
+        with open(env_path) as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                if "=" in line:
+                    k, v = line.split("=", 1)
+                    os.environ.setdefault(k.strip(), v.strip())
+
+
+load_env_file()
 
 IST_OFFSET = datetime.timedelta(hours=5, minutes=30)
 IST = datetime.timezone(IST_OFFSET)

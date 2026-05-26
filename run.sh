@@ -16,4 +16,4 @@ done < "$ENV_FILE"
 
 cd "$SCRIPT_DIR"
 
-/Users/prashanthk/miniconda3/bin/python3 book.py
+caffeinate -is /Users/prashanthk/miniconda3/bin/python3 book.py

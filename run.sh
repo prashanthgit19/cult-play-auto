@@ -9,7 +9,10 @@ if [ ! -f "$ENV_FILE" ]; then
     exit 1
 fi
 
-export $(grep -v '^#' "$ENV_FILE" | xargs)
+while IFS='=' read -r key value; do
+    [[ -z "$key" || "$key" == \#* ]] && continue
+    export "$key=$value"
+done < "$ENV_FILE"
 
 cd "$SCRIPT_DIR"
 

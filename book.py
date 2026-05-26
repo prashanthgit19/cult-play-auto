@@ -164,10 +164,16 @@ def book_slot(slot_id, center_id, workout_id, booking_timestamp, headers):
         "params": None,
     }
     try:
+        print(f"Booking slot {slot_id} at center {center_id}...")
         response = requests.post(url=url, headers=headers, json=body, timeout=30)
+        print(f"Got response: {response.status_code}")
+        check_auth_expired(response)
         return response
     except requests.RequestException as e:
-        print(f"Error booking slot: {e}")
+        print(f"Error booking slot (RequestException): {type(e).__name__}: {e}")
+        return None
+    except Exception as e:
+        print(f"Error booking slot (Unexpected): {type(e).__name__}: {e}")
         return None
 
 
@@ -228,7 +234,9 @@ def main():
                         continue
 
                 response = book_slot(slot_id, center_id, workout_id, booking_ts, headers)
-                if response:
+                if response is None:
+                    print("Booking request failed - no response")
+                else:
                     try:
                         resp_json = response.json()
                     except ValueError:
@@ -264,10 +272,12 @@ def main():
                         }
                         booking_result = "success"
                         break
+                    elif response.status_code == 400 and "Limit exceeded" in resp_str:
+                        print("Booking limit exceeded for this slot.")
+                        booking_result = "failure"
+                        break
                     else:
                         print(f"Booking failed with status {response.status_code}")
-                else:
-                    print("Booking request failed - no response")
 
             if booking_result == "success":
                 break

@@ -3,4 +3,5 @@ __pycache__/
 .env
 .env.*
 *.log
-code.txt
+code.txtcapture.flows
+.DS_Store

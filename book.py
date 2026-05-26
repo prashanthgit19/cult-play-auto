@@ -44,6 +44,10 @@ def get_retry_delay():
 
 
 def sleep_until_target_time():
+    if os.environ.get("SKIP_SLEEP", "false").lower() == "true":
+        print("SKIP_SLEEP=true - Running immediately without waiting.")
+        return
+
     now_ist = datetime.datetime.now(IST)
     target_ist = now_ist.replace(hour=20, minute=59, second=50, microsecond=0)
 

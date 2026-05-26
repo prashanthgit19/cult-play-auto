@@ -3,7 +3,12 @@ name: Cult.fit Auto-Booking
 on:
   schedule:
     - cron: "30 15 * * *" # 8:55 PM IST daily - script sleeps until 8:59:50 PM IST
-  workflow_dispatch: # Allow manual trigger for testing
+  workflow_dispatch:
+    inputs:
+      skip_sleep:
+        description: "Skip the sleep and run immediately (for testing)"
+        required: false
+        default: "false"
 
 jobs:
   book:
@@ -33,4 +38,5 @@ jobs:
           GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
           NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+          SKIP_SLEEP: ${{ github.event.inputs.skip_sleep }}
         run: python book.py

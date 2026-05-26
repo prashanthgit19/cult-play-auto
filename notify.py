@@ -24,6 +24,19 @@ def send_notification(result, booked_class_info=None):
             f"Class ID: {booked_class_info.get('class_id', 'Unknown')}\n\n"
             f"Check your cult.fit app for details."
         )
+    elif result == "auth_expired":
+        subject = "Cult.fit: COOKIES EXPIRED - Action Required!"
+        body = (
+            f"Your cult.fit cookies (st/at) have expired. The booking script cannot authenticate.\n\n"
+            f"ACTION REQUIRED:\n"
+            f"1. Open cult.fit in your browser and login\n"
+            f"2. Open Developer Tools (F12) -> Network tab\n"
+            f"3. Find any API request and copy the new 'st' and 'at' cookie values\n"
+            f"4. Update GitHub Secrets:\n"
+            f"   gh secret set CULT_ST_COOKIE -b 'new_st_value'\n"
+            f"   gh secret set CULT_AT_COOKIE -b 'new_at_value'\n\n"
+            f"Tomorrow's booking will use the updated cookies."
+        )
     else:
         subject = "Cult.fit: Booking FAILED"
         body = (

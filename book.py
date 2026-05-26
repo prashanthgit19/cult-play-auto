@@ -58,10 +58,36 @@ def sleep_until_target_time():
     print(f"Woke up at {datetime.datetime.now(IST).strftime('%H:%M:%S')} IST")
 
 
+def check_auth_expired(response):
+    if response.status_code in (401, 403):
+        print(f"AUTH EXPIRED: Got status {response.status_code}. Your cookies have expired.")
+        print("ACTION REQUIRED: Update your GitHub Secrets (CULT_ST_COOKIE and CULT_AT_COOKIE).")
+        try:
+            from notify import send_notification
+            send_notification("auth_expired", None)
+        except Exception:
+            pass
+        sys.exit(2)
+    try:
+        body = response.json()
+        if isinstance(body, dict) and body.get("statusCode") in (401, 403):
+            print(f"AUTH EXPIRED: API returned auth error code {body.get('statusCode')}. Cookies expired.")
+            print("ACTION REQUIRED: Update your GitHub Secrets (CULT_ST_COOKIE and CULT_AT_COOKIE).")
+            try:
+                from notify import send_notification
+                send_notification("auth_expired", None)
+            except Exception:
+                pass
+            sys.exit(2)
+    except ValueError:
+        pass
+
+
 def fetch_classes_for_center(center_id, headers):
     url = f"https://www.cult.fit/api/cult/classes?center={center_id}"
     try:
         response = requests.get(url=url, headers=headers, timeout=30)
+        check_auth_expired(response)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:

@@ -1,0 +1,36 @@
+name: Cult.fit Auto-Booking
+
+on:
+  schedule:
+    - cron: "30 15 * * *" # 8:55 PM IST daily - script sleeps until 8:59:50 PM IST
+  workflow_dispatch: # Allow manual trigger for testing
+
+jobs:
+  book:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Run booking script
+        env:
+          CULT_ST_COOKIE: ${{ secrets.CULT_ST_COOKIE }}
+          CULT_AT_COOKIE: ${{ secrets.CULT_AT_COOKIE }}
+          CULT_API_KEY: ${{ secrets.CULT_API_KEY }}
+          CULT_CENTER_IDS: ${{ secrets.CULT_CENTER_IDS }}
+          CULT_PREFERRED_TIMES: ${{ secrets.CULT_PREFERRED_TIMES }}
+          CULT_WORKOUT_IDS: ${{ secrets.CULT_WORKOUT_IDS }}
+          CULT_MAX_RETRIES: ${{ secrets.CULT_MAX_RETRIES }}
+          CULT_RETRY_DELAY: ${{ secrets.CULT_RETRY_DELAY }}
+          GMAIL_ADDRESS: ${{ secrets.GMAIL_ADDRESS }}
+          GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
+          NOTIFY_EMAIL: ${{ secrets.NOTIFY_EMAIL }}
+        run: python book.py

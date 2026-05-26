@@ -73,6 +73,18 @@ def sleep_until_target_time():
         return
 
     wait_seconds = (target_ist - now_ist).total_seconds()
+
+    if os.environ.get("CLOUD_MODE", "false").lower() == "true":
+        if wait_seconds > 300:
+            print(f"CLOUD_MODE: wait is {wait_seconds:.0f}s which exceeds 5min timeout. Sleeping 260s.")
+            time.sleep(260)
+            print(f"Woke up at {datetime.datetime.now(IST).strftime('%H:%M:%S')} IST")
+        else:
+            print(f"CLOUD_MODE: sleeping {wait_seconds:.0f}s until 20:59:50 IST")
+            time.sleep(wait_seconds)
+            print(f"Woke up at {datetime.datetime.now(IST).strftime('%H:%M:%S')} IST")
+        return
+
     print(f"Current time: {now_ist.strftime('%H:%M:%S')} IST")
     print(f"Sleeping {wait_seconds:.0f} seconds until 20:59:50 IST (9:00 PM slot)")
     time.sleep(wait_seconds)

@@ -8,8 +8,12 @@ from pathlib import Path
 
 
 def load_env_file():
-    env_path = Path(__file__).parent / ".env"
+    script_dir = Path(os.path.dirname(os.path.abspath(__file__)))
+    env_path = script_dir / ".env"
+    if not env_path.exists():
+        env_path = Path(os.getcwd()) / ".env"
     if env_path.exists():
+        print(f"Loading .env from {env_path}")
         with open(env_path) as f:
             for line in f:
                 line = line.strip()
@@ -18,6 +22,8 @@ def load_env_file():
                 if "=" in line:
                     k, v = line.split("=", 1)
                     os.environ.setdefault(k.strip(), v.strip())
+    else:
+        print("WARNING: .env file not found")
 
 
 load_env_file()

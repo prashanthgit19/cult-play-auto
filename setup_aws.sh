@@ -86,10 +86,7 @@ if [ -n "$EXISTING" ]; then
     aws lambda update-function-configuration \
         --function-name "$FUNCTION_NAME" \
         --timeout 60 \
-        --environment Variables="{
-            CULT_AT_COOKIE,\"$CULT_AT_COOKIE\"
-        }" \
-        --region "$REGION" 2>/dev/null || true
+        --region "$REGION" || true
 else
     echo "Creating new function..."
     aws lambda create-function \
@@ -100,9 +97,6 @@ else
         --zip-file fileb:///tmp/cult-play-deploy.zip \
         --timeout 60 \
         --region "$REGION" \
-        --environment Variables="{
-            CULT_AT_COOKIE,\"$CULT_AT_COOKIE\"
-        }" \
         --query FunctionArn --output text
     echo "Function created."
 fi
@@ -116,20 +110,15 @@ echo ""
 read -p "Enter NOTIFY_EMAIL (default: $GMAIL_ADDR): " NOTIFY
 NOTIFY=${NOTIFY:-$GMAIL_ADDR}
 
+ENV_JSON=$(cat <<EOF
+{"CULT_AT_COOKIE":"$AT_COOKIE","CULT_CENTER_IDS":"1107","CULT_PREFERRED_TIMES":"19:00:00,20:00:00","CULT_WORKOUT_IDS":"350","CULT_MAX_RETRIES":"3","CULT_RETRY_DELAY":"5","GMAIL_ADDRESS":"$GMAIL_ADDR","GMAIL_APP_PASSWORD":"$GMAIL_PASS","NOTIFY_EMAIL":"$NOTIFY"}
+EOF
+)
+
 aws lambda update-function-configuration \
     --function-name "$FUNCTION_NAME" \
     --region "$REGION" \
-    --environment Variables="{
-        CULT_AT_COOKIE=\"$AT_COOKIE\",
-        CULT_CENTER_IDS=\"1107\",
-        CULT_PREFERRED_TIMES=\"19:00:00,20:00:00\",
-        CULT_WORKOUT_IDS=\"350\",
-        CULT_MAX_RETRIES=\"3\",
-        CULT_RETRY_DELAY=\"5\",
-        GMAIL_ADDRESS=\"$GMAIL_ADDR\",
-        GMAIL_APP_PASSWORD=\"$GMAIL_PASS\",
-        NOTIFY_EMAIL=\"$NOTIFY\"
-    }" --output text
+    --environment "{\"Variables\":$ENV_JSON}" --output text
 
 echo "Environment variables set."
 

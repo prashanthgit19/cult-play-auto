@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-REGION="ap-south-1"
+REGION="eu-north-1"
 FUNCTION_NAME="cult-play-auto"
 
 echo "=== Deploying cult-play-auto to AWS Lambda ==="

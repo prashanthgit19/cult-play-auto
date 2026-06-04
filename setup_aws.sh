@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-REGION="eu-north-1"
+REGION="ap-south-1"
 FUNCTION_NAME="cult-play-auto"
 RULE_NAME="cult-play-daily-9pm-ist"
 ROLE_NAME="cult-play-auto-lambda-role"

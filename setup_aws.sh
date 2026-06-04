@@ -17,13 +17,13 @@ if ! command -v aws &>/dev/null; then
     exit 1
 fi
 
-if ! aws sts GetCallerIdentity &>/dev/null; then
+if ! aws sts get-caller-identity &>/dev/null; then
     echo "ERROR: AWS CLI not configured."
     echo "Run: aws configure"
     exit 1
 fi
 
-ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text 2>/dev/null)
 echo "Account: $ACCOUNT_ID"
 echo "Region: $REGION"
 echo ""

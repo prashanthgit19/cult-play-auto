@@ -1,5 +1,6 @@
 import os
 import json
+import time
 import datetime
 import requests
 
@@ -95,6 +96,8 @@ def find_available_slot(schedule_data, preferred_times, workout_ids):
             last_date_key = sorted(class_by_date_map.keys())[-1]
             last_date_data = class_by_date_map[last_date_key]
 
+        waitlist_slots = []
+
         for pref_time in preferred_times:
             for time_slot in last_date_data.get("classByTimeList", []):
                 slot_time = time_slot.get("id", "")
@@ -105,13 +108,18 @@ def find_available_slot(schedule_data, preferred_times, workout_ids):
 
                 for center_class in time_slot.get("centerWiseClasses", []):
                     for workout in center_class.get("classes", []):
-                        if (
-                            workout.get("workoutId") in workout_ids
-                            and workout.get("state") in ("AVAILABLE", "WAITLIST_AVAILABLE")
-                        ):
+                        if workout.get("workoutId") not in workout_ids:
+                            continue
+                        state = workout.get("state", "")
+                        if state == "AVAILABLE":
                             card_action = workout.get("cardAction", {})
                             card_url = card_action.get("url", "")
                             return workout, card_url
+                        elif state == "WAITLIST_AVAILABLE":
+                            waitlist_slots.append((workout, workout.get("cardAction", {}).get("url", "")))
+
+        if waitlist_slots:
+            return waitlist_slots[0][0], waitlist_slots[0][1]
 
         return None, None
     except Exception as e:
@@ -158,12 +166,29 @@ def book_slot(slot_id, center_id, workout_id, booking_timestamp, headers):
         return None
 
 
+def sleep_until_target_time():
+    now_ist = datetime.datetime.now(IST)
+    target_ist = now_ist.replace(hour=20, minute=59, second=50, microsecond=0)
+
+    if now_ist >= target_ist:
+        print(f"Current time {now_ist.strftime('%H:%M:%S')} IST is past 20:59:50. Running immediately.")
+        return
+
+    wait_seconds = (target_ist - now_ist).total_seconds()
+    print(f"Current time: {now_ist.strftime('%H:%M:%S')} IST")
+    print(f"Sleeping {wait_seconds:.0f} seconds until 20:59:50 IST (9:00 PM slot)")
+    time.sleep(wait_seconds)
+    print(f"Woke up at {datetime.datetime.now(IST).strftime('%H:%M:%S')} IST")
+
+
 def lambda_handler(event, context):
     print("=" * 50)
     print("Cult.fit Play Auto-Booking (AWS Lambda)")
     print("=" * 50)
     print(f"Triggered at: {datetime.datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
     print(f"Event: {json.dumps(event)}")
+
+    sleep_until_target_time()
 
     headers = get_headers()
     center_ids = get_center_ids()
@@ -200,6 +225,7 @@ def lambda_handler(event, context):
                     booking_ts = booking_params.get("bookingTimestamp")
 
                     state = workout.get("state", "UNKNOWN")
+                    is_waitlist = (state == "WAITLIST_AVAILABLE")
                     print(f"Found slot: ID={slot_id}, Workout={workout.get('workoutName')}, "
                           f"Time={workout.get('startTime')}, Date={workout.get('date')}, "
                           f"Seats={workout.get('availableSeats')}, State={state}")
@@ -229,17 +255,30 @@ def lambda_handler(event, context):
                         print(f"Response: {resp_str[:300]}")
 
                         if response.status_code == 200:
-                            print("SLOT BOOKED SUCCESSFULLY!")
-                            booked_class_info = {
-                                "workout_name": workout.get("workoutName", "Unknown"),
-                                "start_time": workout.get("startTime", "Unknown"),
-                                "date": workout.get("date", "Unknown"),
-                                "center_id": center_id,
-                                "slot_id": slot_id,
-                                "available_seats": workout.get("availableSeats", 0),
-                                "state": state,
-                            }
-                            booking_result = "success"
+                            if is_waitlist:
+                                print("WAITLIST BOOKED - Slots were full, joined waitlist.")
+                                booked_class_info = {
+                                    "workout_name": workout.get("workoutName", "Unknown"),
+                                    "start_time": workout.get("startTime", "Unknown"),
+                                    "date": workout.get("date", "Unknown"),
+                                    "center_id": center_id,
+                                    "slot_id": slot_id,
+                                    "available_seats": workout.get("availableSeats", 0),
+                                    "state": "WAITLIST_BOOKED",
+                                }
+                                booking_result = "waitlist"
+                            else:
+                                print("SLOT BOOKED SUCCESSFULLY!")
+                                booked_class_info = {
+                                    "workout_name": workout.get("workoutName", "Unknown"),
+                                    "start_time": workout.get("startTime", "Unknown"),
+                                    "date": workout.get("date", "Unknown"),
+                                    "center_id": center_id,
+                                    "slot_id": slot_id,
+                                    "available_seats": workout.get("availableSeats", 0),
+                                    "state": state,
+                                }
+                                booking_result = "success"
                             break
                         elif response.status_code == 400 and "Booking Conflict" in resp_str:
                             print("Already booked at this timeslot - treating as success.")
@@ -252,7 +291,7 @@ def lambda_handler(event, context):
                                 "available_seats": workout.get("availableSeats", 0),
                                 "state": "ALREADY_BOOKED",
                             }
-                            booking_result = "success"
+                            booking_result = "success" if not is_waitlist else "waitlist"
                             break
                         elif response.status_code == 400 and "Limit exceeded" in resp_str:
                             print("Booking limit exceeded for this slot.")
@@ -261,15 +300,14 @@ def lambda_handler(event, context):
                         else:
                             print(f"Booking failed with status {response.status_code}")
 
-                if booking_result == "success":
+                if booking_result in ("success", "waitlist"):
                     break
 
-            if booking_result == "success":
+            if booking_result in ("success", "waitlist"):
                 break
 
             if attempt < max_retries:
                 print(f"Attempt failed. Retrying in {retry_delay} seconds...")
-                import time
                 time.sleep(retry_delay)
 
     except Exception as e:
@@ -279,7 +317,7 @@ def lambda_handler(event, context):
             booking_result = "failure"
             print(f"Unexpected error: {e}")
 
-    if booking_result != "success":
+    if booking_result not in ("success", "waitlist"):
         print(f"\nBooking result: {booking_result}")
         booking_result = booking_result or "failure"
         booked_class_info = None
@@ -291,7 +329,7 @@ def lambda_handler(event, context):
         print(f"Failed to send notification: {e}")
 
     return {
-        "statusCode": 200 if booking_result == "success" else 500,
+        "statusCode": 200 if booking_result in ("success", "waitlist") else 500,
         "body": json.dumps({
             "result": booking_result,
             "booked_class": booked_class_info,

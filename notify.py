@@ -24,6 +24,17 @@ def send_notification(result, booked_class_info=None):
             f"Slot ID: {booked_class_info.get('slot_id', 'Unknown')}\n\n"
             f"Check your cult.fit app for details."
         )
+    elif result == "waitlist" and booked_class_info:
+        subject = "Cult.fit Play: Slots Full - Joined Waitlist"
+        body = (
+            f"Slots were full. You have been added to the waitlist.\n\n"
+            f"Workout: {booked_class_info.get('workout_name', 'Unknown')}\n"
+            f"Date: {booked_class_info.get('date', 'Unknown')}\n"
+            f"Time: {booked_class_info.get('start_time', 'Unknown')}\n"
+            f"Center ID: {booked_class_info.get('center_id', 'Unknown')}\n"
+            f"Slot ID: {booked_class_info.get('slot_id', 'Unknown')}\n\n"
+            f"Check your cult.fit app for details."
+        )
     elif result == "auth_expired":
         subject = "Cult.fit: TOKEN EXPIRED - Action Required!"
         body = (

@@ -85,7 +85,7 @@ if [ -n "$EXISTING" ]; then
     sleep 5
     aws lambda update-function-configuration \
         --function-name "$FUNCTION_NAME" \
-        --timeout 60 \
+        --timeout 300 \
         --region "$REGION" || true
 else
     echo "Creating new function..."
@@ -95,7 +95,7 @@ else
         --role "$ROLE_ARN" \
         --handler lambda_function.lambda_handler \
         --zip-file fileb:///tmp/cult-play-deploy.zip \
-        --timeout 60 \
+        --timeout 300 \
         --region "$REGION" \
         --query FunctionArn --output text
     echo "Function created."

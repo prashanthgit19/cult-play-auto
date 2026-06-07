@@ -172,7 +172,7 @@ def sleep_until_target_time():
         return
 
     now_ist = datetime.datetime.now(IST)
-    target_ist = now_ist.replace(hour=20, minute=59, second=50, microsecond=0)
+    target_ist = now_ist.replace(hour=21, minute=0, second=0, microsecond=0)
 
     if now_ist >= target_ist:
         print(f"Current time {now_ist.strftime('%H:%M:%S')} IST is past 20:59:50. Running immediately.")

@@ -3,9 +3,10 @@ set -e
 
 REGION="ap-south-1"
 FUNCTION_NAME="cult-play-auto"
-RULE_NAME="cult-play-daily-9pm-ist"
+RULE_NAME_SELF="cult-play-daily-9pm-ist"
+RULE_NAME_FRIEND="cult-play-daily-9pm-ist-friend"
 ROLE_NAME="cult-play-auto-lambda-role"
-SCHEDULE="cron(25 15 * * ? *)"
+SCHEDULE="cron(30 15 * * ? *)"
 
 echo "=== Cult.fit Play Auto-Booking: AWS Setup ==="
 echo ""
@@ -103,15 +104,26 @@ fi
 
 echo ""
 echo "--- Step 4: Set environment variables ---"
-read -p "Enter your CULT_AT_COOKIE (CFAPP:...): " AT_COOKIE
+echo "=== YOUR (self) configuration ==="
+read -p "Enter your CULT_AT_COOKIE (CFAPP:...): " AT_COOKIE_SELF
 read -p "Enter GMAIL_ADDRESS: " GMAIL_ADDR
 read -sp "Enter GMAIL_APP_PASSWORD: " GMAIL_PASS
 echo ""
-read -p "Enter NOTIFY_EMAIL (default: $GMAIL_ADDR): " NOTIFY
-NOTIFY=${NOTIFY:-$GMAIL_ADDR}
+read -p "Enter YOUR NOTIFY_EMAIL (default: $GMAIL_ADDR): " NOTIFY_SELF
+NOTIFY_SELF=${NOTIFY_SELF:-$GMAIL_ADDR}
+
+echo ""
+echo "=== FRIEND configuration ==="
+read -p "Enter FRIEND CULT_AT_COOKIE (CFAPP:...): " AT_COOKIE_FRIEND
+read -p "Enter FRIEND NOTIFY_EMAIL: " NOTIFY_FRIEND
+read -p "Enter FRIEND GMAIL_ADDRESS (default: $GMAIL_ADDR - uses same sender): " GMAIL_ADDR_FRIEND
+GMAIL_ADDR_FRIEND=${GMAIL_ADDR_FRIEND:-$GMAIL_ADDR}
+read -sp "Enter FRIEND GMAIL_APP_PASSWORD (default: same as yours): " GMAIL_PASS_FRIEND
+echo ""
+GMAIL_PASS_FRIEND=${GMAIL_PASS_FRIEND:-$GMAIL_PASS}
 
 ENV_JSON=$(cat <<EOF
-{"CULT_AT_COOKIE":"$AT_COOKIE","CULT_CENTER_IDS":"1107","CULT_PREFERRED_TIMES":"19:00:00,20:00:00","CULT_WORKOUT_IDS":"350","CULT_MAX_RETRIES":"3","CULT_RETRY_DELAY":"5","GMAIL_ADDRESS":"$GMAIL_ADDR","GMAIL_APP_PASSWORD":"$GMAIL_PASS","NOTIFY_EMAIL":"$NOTIFY"}
+{"CULT_AT_COOKIE":"$AT_COOKIE_SELF","CULT_CENTER_IDS":"1107","CULT_PREFERRED_TIMES":"19:00:00,20:00:00","CULT_WORKOUT_IDS":"350","CULT_MAX_RETRIES":"3","CULT_RETRY_DELAY":"5","FRIEND_CULT_AT_COOKIE":"$AT_COOKIE_FRIEND","FRIEND_CULT_CENTER_IDS":"1107","FRIEND_CULT_PREFERRED_TIMES":"19:00:00,20:00:00","FRIEND_CULT_WORKOUT_IDS":"350","FRIEND_CULT_MAX_RETRIES":"3","FRIEND_CULT_RETRY_DELAY":"5","FRIEND_CULT_DEVICE_ID":"BD0AA0A8-4124-48C4-B8BD-7DF7DF3FC20B","FRIEND_CULT_USER_AGENT":"CureFit/907135 CFNetwork/3826.400.120 Darwin/24.3.0","FRIEND_CULT_CLIENT_VERSION":"11.75","GMAIL_ADDRESS":"$GMAIL_ADDR","GMAIL_APP_PASSWORD":"$GMAIL_PASS","NOTIFY_EMAIL":"$NOTIFY_SELF","FRIEND_GMAIL_ADDRESS":"$GMAIL_ADDR_FRIEND","FRIEND_GMAIL_APP_PASSWORD":"$GMAIL_PASS_FRIEND","FRIEND_NOTIFY_EMAIL":"$NOTIFY_FRIEND"}
 EOF
 )
 
@@ -123,37 +135,62 @@ aws lambda update-function-configuration \
 echo "Environment variables set."
 
 echo ""
-echo "--- Step 5: Create EventBridge scheduled rule ---"
+echo "--- Step 5: Create EventBridge scheduled rule (self) ---"
 aws events put-rule \
-    --name "$RULE_NAME" \
+    --name "$RULE_NAME_SELF" \
     --schedule-expression "$SCHEDULE" \
     --region "$REGION" \
     --state ENABLED \
     --query RuleArn --output text 2>/dev/null || echo "Rule may already exist"
-echo "Rule created: $SCHEDULE (fires at 3:25 PM UTC = 8:55 PM IST)"
+echo "Rule created: $SCHEDULE (fires at 9:00 PM IST daily)"
 
 LAMBDA_ARN="arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION_NAME"
 aws lambda add-permission \
     --function-name "$FUNCTION_NAME" \
-    --statement-id EventBridgeInvoke \
+    --statement-id EventBridgeInvokeSelf \
     --action lambda:InvokeFunction \
     --principal events.amazonaws.com \
-    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME" \
+    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME_SELF" \
     --region "$REGION" 2>/dev/null || echo "Permission may already exist"
 
 aws events put-targets \
-    --rule "$RULE_NAME" \
-    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\"}]" \
+    --rule "$RULE_NAME_SELF" \
+    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\",\"Input\":\"{\\\"user\\\":\\\"self\\\"}\"}]" \
+    --region "$REGION" --output text 2>/dev/null || echo "Target may already exist"
+
+echo ""
+echo "--- Step 6: Create EventBridge scheduled rule (friend) ---"
+aws events put-rule \
+    --name "$RULE_NAME_FRIEND" \
+    --schedule-expression "$SCHEDULE" \
+    --region "$REGION" \
+    --state ENABLED \
+    --query RuleArn --output text 2>/dev/null || echo "Rule may already exist"
+echo "Rule created: $SCHEDULE (fires at 9:00 PM IST daily)"
+
+aws lambda add-permission \
+    --function-name "$FUNCTION_NAME" \
+    --statement-id EventBridgeInvokeFriend \
+    --action lambda:InvokeFunction \
+    --principal events.amazonaws.com \
+    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME_FRIEND" \
+    --region "$REGION" 2>/dev/null || echo "Permission may already exist"
+
+aws events put-targets \
+    --rule "$RULE_NAME_FRIEND" \
+    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\",\"Input\":\"{\\\"user\\\":\\\"friend\\\"}\"}]" \
     --region "$REGION" --output text 2>/dev/null || echo "Target may already exist"
 
 echo ""
 echo "=== Setup complete! ==="
 echo ""
 echo "Lambda function: $FUNCTION_NAME"
-echo "EventBridge rule: $RULE_NAME (8:55 PM IST daily)"
+echo "EventBridge rules:"
+echo "  - $RULE_NAME_SELF (9:00 PM IST, user=self)"
+echo "  - $RULE_NAME_FRIEND (9:00 PM IST, user=friend)"
 echo ""
 echo "Useful commands:"
-echo "  Test run:   aws lambda invoke --function-name $FUNCTION_NAME --region $REGION /tmp/response.json && cat /tmp/response.json"
-echo "  View logs:  aws logs tail /aws/lambda/$FUNCTION_NAME --region $REGION"
-echo "  Update env:  aws lambda update-function-configuration --function-name $FUNCTION_NAME --region $REGION --environment Variables='{...}'"
-echo "  Update code: ./deploy.sh"
+echo "  Test self:   aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"user\":\"self\",\"SKIP_SLEEP\":true}' /tmp/response-self.json && cat /tmp/response-self.json"
+echo "  Test friend: aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"user\":\"friend\",\"SKIP_SLEEP\":true}' /tmp/response-friend.json && cat /tmp/response-friend.json"
+echo "  View logs:   aws logs tail /aws/lambda/$FUNCTION_NAME --region $REGION"
+echo "  Deploy code: ./deploy.sh"

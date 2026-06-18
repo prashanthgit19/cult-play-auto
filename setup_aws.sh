@@ -3,8 +3,7 @@ set -e
 
 REGION="ap-south-1"
 FUNCTION_NAME="cult-play-auto"
-RULE_NAME_SELF="cult-play-daily-9pm-ist"
-RULE_NAME_FRIEND="cult-play-daily-9pm-ist-friend"
+RULE_NAME="cult-play-daily-9pm-ist"
 ROLE_NAME="cult-play-auto-lambda-role"
 SCHEDULE="cron(30 15 * * ? *)"
 
@@ -135,9 +134,9 @@ aws lambda update-function-configuration \
 echo "Environment variables set."
 
 echo ""
-echo "--- Step 5: Create EventBridge scheduled rule (self) ---"
+echo "--- Step 5: Create EventBridge scheduled rule ---"
 aws events put-rule \
-    --name "$RULE_NAME_SELF" \
+    --name "$RULE_NAME" \
     --schedule-expression "$SCHEDULE" \
     --region "$REGION" \
     --state ENABLED \
@@ -147,50 +146,25 @@ echo "Rule created: $SCHEDULE (fires at 9:00 PM IST daily)"
 LAMBDA_ARN="arn:aws:lambda:$REGION:$ACCOUNT_ID:function:$FUNCTION_NAME"
 aws lambda add-permission \
     --function-name "$FUNCTION_NAME" \
-    --statement-id EventBridgeInvokeSelf \
+    --statement-id EventBridgeInvoke \
     --action lambda:InvokeFunction \
     --principal events.amazonaws.com \
-    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME_SELF" \
+    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME" \
     --region "$REGION" 2>/dev/null || echo "Permission may already exist"
 
 aws events put-targets \
-    --rule "$RULE_NAME_SELF" \
-    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\",\"Input\":\"{\\\"user\\\":\\\"self\\\"}\"}]" \
-    --region "$REGION" --output text 2>/dev/null || echo "Target may already exist"
-
-echo ""
-echo "--- Step 6: Create EventBridge scheduled rule (friend) ---"
-aws events put-rule \
-    --name "$RULE_NAME_FRIEND" \
-    --schedule-expression "$SCHEDULE" \
-    --region "$REGION" \
-    --state ENABLED \
-    --query RuleArn --output text 2>/dev/null || echo "Rule may already exist"
-echo "Rule created: $SCHEDULE (fires at 9:00 PM IST daily)"
-
-aws lambda add-permission \
-    --function-name "$FUNCTION_NAME" \
-    --statement-id EventBridgeInvokeFriend \
-    --action lambda:InvokeFunction \
-    --principal events.amazonaws.com \
-    --source-arn "arn:aws:events:$REGION:$ACCOUNT_ID:rule/$RULE_NAME_FRIEND" \
-    --region "$REGION" 2>/dev/null || echo "Permission may already exist"
-
-aws events put-targets \
-    --rule "$RULE_NAME_FRIEND" \
-    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\",\"Input\":\"{\\\"user\\\":\\\"friend\\\"}\"}]" \
+    --rule "$RULE_NAME" \
+    --targets "[{\"Id\":\"1\",\"Arn\":\"$LAMBDA_ARN\",\"Input\":\"{\\\"users\\\":[\\\"self\\\",\\\"friend\\\"]}\"}]" \
     --region "$REGION" --output text 2>/dev/null || echo "Target may already exist"
 
 echo ""
 echo "=== Setup complete! ==="
 echo ""
 echo "Lambda function: $FUNCTION_NAME"
-echo "EventBridge rules:"
-echo "  - $RULE_NAME_SELF (9:00 PM IST, user=self)"
-echo "  - $RULE_NAME_FRIEND (9:00 PM IST, user=friend)"
+echo "EventBridge rule: $RULE_NAME (9:00 PM IST, books self + friend in parallel)"
 echo ""
 echo "Useful commands:"
-echo "  Test self:   aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"user\":\"self\",\"SKIP_SLEEP\":true}' /tmp/response-self.json && cat /tmp/response-self.json"
-echo "  Test friend: aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"user\":\"friend\",\"SKIP_SLEEP\":true}' /tmp/response-friend.json && cat /tmp/response-friend.json"
+echo "  Test (single): aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"user\":\"self\",\"SKIP_SLEEP\":true}' /tmp/response.json && cat /tmp/response.json"
+echo "  Test (parallel): aws lambda invoke --function-name $FUNCTION_NAME --region $REGION --payload '{\"users\":[\"self\",\"friend\"],\"SKIP_SLEEP\":true}' /tmp/response.json && cat /tmp/response.json"
 echo "  View logs:   aws logs tail /aws/lambda/$FUNCTION_NAME --region $REGION"
 echo "  Deploy code: ./deploy.sh"

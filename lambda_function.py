@@ -2,6 +2,7 @@ import os
 import json
 import time
 import datetime
+import threading
 import requests
 
 IST_OFFSET = datetime.timedelta(hours=5, minutes=30)
@@ -323,6 +324,17 @@ def book_for_user(user):
     return booking_result, booked_class_info
 
 
+def book_user_wrapper(user):
+    result, class_info = book_for_user(user)
+    config = get_user_config(user)
+    try:
+        from notify import send_notification
+        send_notification(result, class_info, config)
+    except Exception as e:
+        print(f"Failed to send notification for '{config['name']}': {e}")
+    return user, result, class_info
+
+
 def lambda_handler(event, context):
     print("=" * 50)
     print("Cult.fit Play Auto-Booking (AWS Lambda)")
@@ -330,24 +342,47 @@ def lambda_handler(event, context):
     print(f"Triggered at: {datetime.datetime.now(IST).strftime('%Y-%m-%d %H:%M:%S')} IST")
     print(f"Event: {json.dumps(event)}")
 
+    if isinstance(event, dict) and event.get("SKIP_SLEEP"):
+        os.environ["SKIP_SLEEP"] = "true"
+
     sleep_until_target_time()
 
-    user = event.get("user", "self") if isinstance(event, dict) else "self"
+    if isinstance(event, dict) and "users" in event:
+        users = event["users"]
+    elif isinstance(event, dict) and "user" in event:
+        users = [event["user"]]
+    else:
+        users = ["self"]
 
-    booking_result, booked_class_info = book_for_user(user)
-    config = get_user_config(user)
+    if len(users) > 1:
+        print(f"Booking in parallel for users: {users}")
+        threads = []
+        results = {}
 
-    try:
-        from notify import send_notification
-        send_notification(booking_result, booked_class_info, config)
-    except Exception as e:
-        print(f"Failed to send notification: {e}")
+        def _book(user):
+            results[user] = book_user_wrapper(user)
+
+        for user in users:
+            t = threading.Thread(target=_book, args=(user,))
+            threads.append(t)
+            t.start()
+
+        for t in threads:
+            t.join()
+
+        all_results = {user: {"result": r, "class_info": c} for user, r, c in results.values()}
+    else:
+        user = users[0]
+        result, class_info = book_for_user(user)
+        config = get_user_config(user)
+        try:
+            from notify import send_notification
+            send_notification(result, class_info, config)
+        except Exception as e:
+            print(f"Failed to send notification: {e}")
+        all_results = {user: {"result": result, "class_info": class_info}}
 
     return {
-        "statusCode": 200 if booking_result in ("success", "waitlist") else 500,
-        "body": json.dumps({
-            "user": config["name"],
-            "result": booking_result,
-            "booked_class": booked_class_info,
-        }),
+        "statusCode": 200,
+        "body": json.dumps(all_results, default=str),
     }

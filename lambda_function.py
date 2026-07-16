@@ -63,7 +63,8 @@ def get_headers(config):
 
 def check_auth_expired(response, config):
     if response.status_code == 401:
-        print(f"AUTH EXPIRED for user '{config['name']}': Got status 401.")
+        user_name = config.get("name", "unknown") if config else "unknown"
+        print(f"AUTH EXPIRED for user '{user_name}': Got status 401.")
         print("ACTION REQUIRED: Update the CULT_AT_COOKIE Lambda env var with a fresh mobile app token.")
         try:
             from notify import send_notification
@@ -73,11 +74,11 @@ def check_auth_expired(response, config):
         raise Exception("AUTH_EXPIRED")
 
 
-def fetch_schedule(center_id, workout_id, headers):
+def fetch_schedule(center_id, workout_id, headers, config=None):
     url = f"https://www.cult.fit/api/v2/fitso/schedule?productType=FITNESS&centerId={center_id}&sportId={workout_id}&workoutId={workout_id}"
     try:
         response = requests.get(url=url, headers=headers, timeout=30)
-        check_auth_expired(response, None)
+        check_auth_expired(response, config)
         response.raise_for_status()
         return response.json()
     except requests.RequestException as e:
@@ -210,7 +211,7 @@ def book_for_user(user):
 
         for center_id in center_ids:
             for workout_id in workout_ids:
-                schedule_data = fetch_schedule(center_id, workout_id, headers)
+                schedule_data = fetch_schedule(center_id, workout_id, headers, config)
                 if not schedule_data:
                     continue
 
